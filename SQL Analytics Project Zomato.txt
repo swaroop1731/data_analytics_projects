@@ -1,0 +1,278 @@
+CREATE TABLES !!! 
+
+drop table if exists goldusers_signup;
+CREATE TABLE goldusers_signup(userid integer,gold_signup_date date); 
+
+INSERT INTO goldusers_signup(userid,gold_signup_date) 
+ VALUES (1,'09-22-2017'),
+(3,'04-21-2017');
+
+---------------------------------------------------
+
+drop table if exists users;
+CREATE TABLE users(userid integer,signup_date date); 
+
+INSERT INTO users(userid,signup_date) 
+ VALUES (1,'09-02-2014'),
+(2,'01-15-2015'),
+(3,'04-11-2014');
+
+---------------------------------------------------
+
+drop table if exists sales;
+CREATE TABLE sales(userid integer,created_date date,product_id integer); 
+
+INSERT INTO sales(userid,created_date,product_id) 
+ VALUES (1,'04-19-2017',2),
+(3,'12-18-2019',1),
+(2,'07-20-2020',3),
+(1,'10-23-2019',2),
+(1,'03-19-2018',3),
+(3,'12-20-2016',2),
+(1,'11-09-2016',1),
+(1,'05-20-2016',3),
+(2,'09-24-2017',1),
+(1,'03-11-2017',2),
+(1,'03-11-2016',1),
+(3,'11-10-2016',1),
+(3,'12-07-2017',2),
+(3,'12-15-2016',2),
+(2,'11-08-2017',2),
+(2,'09-10-2018',3);
+
+---------------------------------------------------
+
+drop table if exists product;
+CREATE TABLE product(product_id integer,product_name text,price integer); 
+
+INSERT INTO product(product_id,product_name,price) 
+ VALUES
+(1,'p1',980),
+(2,'p2',870),
+(3,'p3',330);
+
+---------------------------------------------------
+
+select * from goldusers_signup;
+select * from users;
+select * from product;
+select * from sales;
+
+---------------------------------------------------
+
+
+1. What is the Total Amount Each Customer Spent on Zomato ?
+
+-> For this Question we need to Consider product table and sales table.
+
+select 
+s.userid as user,
+sum(p.price) as total_money_spent
+from
+sales s
+JOIN
+product p
+ON
+s.product_id = p.product_id
+group by s.userid;
+
+| user | total_money_spent |
+|------|-------------------|
+|    1 |              5230 |
+|    3 |              4570 |
+|    2 |              2510 |
+
+---------------------------------------------------
+
+2. How many days has each Customer visited Zomato ?
+
+-> For this question we can use sales table.
+
+select userid, CONCAT(COUNT(distinct created_date),' ','Days') as customers_visited_zomato
+from sales group by userid order by count(created_date) desc;
+
+| userid | customers_visited_zomato |
+|--------|--------------------------|
+|      1 |                   7 Days |
+|      3 |                   5 Days |
+|      2 |                   4 Days |
+
+---------------------------------------------------
+
+3. What was the First Product purchased by Each Customer ?
+
+-> For this question to answer we need Sales and Product Table.
+
+-- select * from sales;
+-- select * from product;
+
+with CTE as (
+
+  select 
+  s.userid,
+  product_name,
+  created_date,
+  rank() over(partition by s.userid order by created_date asc) as rnk
+from
+sales s
+JOIN 
+product p
+ON
+  p.product_id = s.product_id ) 
+
+select userid as user, product_name as first_ordered_product,
+created_date as order_on from CTE where rnk = 1;
+
+| user | first_ordered_product |   order_on |
+|------|-----------------------|------------|
+|    1 |                    p1 | 2016-03-11 |
+|    2 |                    p1 | 2017-09-24 |
+|    3 |                    p1 | 2016-11-10 |
+
+---------------------------------------------------
+
+
+4. What is the most Purchased product on the Menu and How many times it was purchased by all Customers ?
+
+-> We need only Sales tables to answer this Question.
+
+-- select * from sales;
+
+select
+product_id,
+count(product_id) as Purchased_Frequency_Of_Product
+from
+sales
+group by product_id order by 2 desc;
+
+| product_id | purchased_frequency_of_product |
+|------------|--------------------------------|
+|          2 |                              7 |
+|          1 |                              5 |
+|          3 |                              4 |
+
+---------------------------------------------------
+
+5. Which item was Popular for Each of the Customer ?
+
+select
+userid,
+p.product_id,
+count(product_name) as cnt
+from
+sales s
+JOIN
+product p
+ON
+s.product_id = p.product_id
+group by userid,p.product_id order by 1,3 desc;
+
+| userid | product_id | cnt |
+|--------|------------|-----|
+|      1 |          2 |   3 |
+|      1 |          1 |   2 |
+|      1 |          3 |   2 |
+|      2 |          3 |   2 |
+|      2 |          2 |   1 |
+|      2 |          1 |   1 |
+|      3 |          2 |   3 |
+|      3 |          1 |   2 |
+
+Alternate Solution
+
+select * from 
+(select *, rank() over(partition by userid order by cnt desc) rnk from
+(select userid, product_id, count(product_id) as cnt from sales group by userid, product_id) a) b
+where rnk = 1;
+
+| userid | product_id | cnt | rnk |
+|--------|------------|-----|-----|
+|      1 |          2 |   3 |   1 |
+|      2 |          3 |   2 |   1 |
+|      3 |          2 |   3 |   1 |
+
+---------------------------------------------------
+
+6. Which was the first item purchased by the Customer after they became a gold member ?
+
+select * from sales where created_date >= '09-22-2017' and userid = 1
+order by created_date asc
+;
+
+-- 2018-03-19	3rd Product
+-- 2017-12-07	 2nd Product 
+
+select * from
+( select c.*, rank() over(partition by userid order by created_date) rnk from
+( select a.userid, a.created_date, a.product_id, b.gold_signup_date from sales a inner join
+ goldusers_signup b on a.userid = b.userid and created_date >= gold_signup_date) c) d
+ where rnk = 1;
+ 
+| userid | created_date | product_id | gold_signup_date | rnk |
+|--------|--------------|------------|------------------|-----|
+|      1 |   2018-03-19 |          3 |       2017-09-22 |   1 |
+|      3 |   2017-12-07 |          2 |       2017-04-21 |   1 |
+
+
+---------------------------------------------------
+
+ 7. Which product was purchased by the Customer Just before bocoming a gold member ?
+
+select * from
+( select c.*, rank() over(partition by userid order by created_date desc) rnk from
+( select a.userid, a.created_date, a.product_id, b.gold_signup_date from sales a inner join
+ goldusers_signup b on a.userid = b.userid and created_date <= gold_signup_date) c) d
+ where rnk = 1;
+
+| userid | created_date | product_id | gold_signup_date | rnk |
+|--------|--------------|------------|------------------|-----|
+|      1 |   2017-04-19 |          2 |       2017-09-22 |   1 |
+|      3 |   2016-12-20 |          2 |       2017-04-21 |   1 |
+
+---------------------------------------------------
+ 
+ 
+ 8. What is the total orders and amount spent for each member before they became a gold member ?
+ 
+ 
+select a.userid,  count(a.product_id) as number_of_orders_before, sum(p.price) as total_money_spent_before from sales a inner join
+goldusers_signup b on a.userid = b.userid and created_date <= gold_signup_date
+inner join product p on 
+p.product_id = a.product_id  
+group by a.userid order by 3 desc,2 desc;
+
+| userid | number_of_orders_before | total_money_spent_before |
+|--------|-------------------------|--------------------------|
+|      1 |                       5 |                     4030 |
+|      3 |                       3 |                     2720 |
+
+
+---------------------------------------------------
+
+
+9. If buying each products generate points for eg
+P1 => 5rs = 1 Zp
+P2 => 10rs = 5 Zp
+P3 => 5rs = 1 Zp. Tell how many Zomato Points each customer has.
+
+
+select d.userid, sum(Zomato_points) as total_zomato_points from
+(select c.*, (c.price_ / c.points) as Zomato_points from
+(select b.*,
+case when b.product_id = 1 then 5 
+       when b.product_id = 2 then 2
+       when b.product_id = 3 then 5 else 0 END as points
+from
+(select a.userid, a.product_id, sum(a.price) as price_ from
+(select s.*, p.price 
+from sales s JOIN product p
+ON s.product_id = p.product_id) a group by a.userid, a.product_id order by a.userid, price_ desc) b) c) d group by d.userid;
+
+
+| userid | total_zomato_points |
+|--------|---------------------|
+|      1 |                1829 |
+|      2 |                 763 |
+|      3 |                1697 |
+
+---------------------------------------------------
